@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>assign4</title>
+  </head>
+
+  <body >
+    <canvas id="canvas" width="800" height="600">
+    Please use a browser that supports "canvas"
+    </canvas>
+    <style>
+      body {
+          margin: 0;
+      }
+      #canvas {
+          width: 60%;
+          height: 60%;
+          display: block;
+          
+      }
+      </style>
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+   
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.142.0/build/three.module",
+            "three/addons/": "https://unpkg.com/three@0.142.0/examples/jsm/"
+          }
+        }
+    </script>
+    
+    <script type="module">
+    /*    Credits
+      for help with setting up the import map for three.js
+      https://medium.com/threejs/why-does-three-js-need-import-maps-aca9cbc53ffa
+
+      for a lot of the code basis and help understanding three.js
+      https://threejs.org/manual/
+
+
+      Octopus by Poly by Google [CC-BY] (https://creativecommons.org/licenses/by/3.0/) via Poly Pizza (https://poly.pizza/m/9-b6-yqrwEe)
+    */
+    import * as THREE from 'three';
+    import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+    import {OBJLoader} from 'three/addons/loaders/OBJLoader.js';
+    import {MTLLoader} from 'three/addons/loaders/MTLLoader.js'
+
+    var wheels = [];
+    var renderer = null;
+    var scene = null;
+    var camera = null;
+    var rtScene = null;
+    var rtCamera = null;
+    var renderTarget = null;
+    var loader = null;
+    function main() {
+      const canvas = document.getElementById('canvas');
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        canvas,
+        alpha: true,
+      });
+      renderer.shadowMap.enabled = true;
+      loader = new THREE.TextureLoader();
+      scene = new THREE.Scene();
+      const fov = 45;
+      const aspect = 2;  // the canvas default
+      const near = 0.1;
+      const far = 1000;
+      camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+      camera.position.set(0, 10, 20);
+
+      const controls = new OrbitControls(camera, canvas);
+      controls.target.set(0, 5, 0);
+      controls.update();
+
+      const fogColor = 0xFFFFFF;  // white
+      const fogNear = 10;
+      const fogFar = 100;
+      scene.fog = new THREE.Fog(fogColor, fogNear, fogFar);
+
+      const planeSize = 400;
+ 
+      var cubeLoader = new THREE.CubeTextureLoader();
+      const bgTexture = cubeLoader.load([
+      'nightSky1.jpg',
+      'nightSky1.jpg',
+      'moon.jpg',
+      'nightSky1.jpg',
+      'nightSky1.jpg',
+      'nightSky1.jpg',
+      ]);
+      scene.background = bgTexture;
+
+      const texture = loader.load('water.jpg');
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.magFilter = THREE.NearestFilter;
+      const repeats = planeSize / 2;
+      texture.repeat.set(repeats, repeats);
+
+      //render targets
+      const rtWidth = 512;
+      const rtHeight = 512;
+      renderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight);
+      const rtFov = 75;
+      const rtAspect = rtWidth / rtHeight;
+      const rtNear = 0.1;
+      const rtFar = 5;
+      rtCamera = new THREE.PerspectiveCamera(rtFov, rtAspect, rtNear, rtFar);
+      rtCamera.position.z = 2;
+ 
+      rtScene = new THREE.Scene();
+      const color = 0xFFFFFF;
+      const rtlight = new THREE.DirectionalLight(color, 1);
+      rtlight.position.set(-1, 2, 4);
+      rtScene.add(rtlight);
+      rtScene.background = new THREE.Color('#808080');
+      const tLightGeo = new THREE.BoxGeometry( 0.6, 0.6, 0.6); 
+      const tLightMat = new THREE.MeshPhongMaterial( {color: '#FFFF00'} ); 
+      const tLight = new THREE.Mesh( tLightGeo, tLightMat );
+      rtScene.add( tLight );
+      const tLight2 = new THREE.Mesh( tLightGeo, tLightMat );
+      tLight2.position.x = tLight.position.x- 0.1; 
+      rtScene.add( tLight2 );  
+
+      //ground plane
+      const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
+      const planeMat = new THREE.MeshPhongMaterial({
+        map: texture,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(planeGeo, planeMat);
+      mesh.receiveShadow = true;
+      mesh.rotation.x = Math.PI * -.5;
+      scene.add(mesh);
+      const shadowTexture = loader.load('roundshadow.png');
+
+      
+      const boxWidth = 1;
+      const boxHeight = 1;
+      const boxDepth = 1;
+      const geometry = new THREE.BoxGeometry(boxWidth, boxHeight, boxDepth);
+      const material = new THREE.MeshPhongMaterial({color: 0x44aa88});
+      const mtlLoader = new MTLLoader();
+      const objLoader = new OBJLoader();
+      mtlLoader.load('Octopus.mtl', (mtl) => {
+        mtl.preload();
+        objLoader.setMaterials(mtl);
+        objLoader.load('Octopus.obj', (root) => {
+          root.position.x = 40;
+          root.position.y = -2;
+          root.rotation.y = 300;
+          scene.add(root);
+        });
+      });
+      
+      
+
+      shipInst(1,9);
+      shipInst(15,10 );
+
+      const sphereRadius = 3;
+      const sphereWidthDivisions = 32;
+      const sphereHeightDivisions = 16;
+      const sphereGeo = new THREE.SphereGeometry(sphereRadius, sphereWidthDivisions, sphereHeightDivisions);
+      const sphereMat = new THREE.MeshPhongMaterial({color: '#5A5A5A'});
+      const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
+      sphereMesh.position.set(-sphereRadius - 1, -2 , 0);
+      //sphereMesh.castShadow = true;
+      sphereMesh.receiveShadow = true;
+      scene.add(sphereMesh);
+
+      const towerGeo = new THREE.CylinderGeometry( 1, 1, 2, 32 ); 
+      const towerMat = new THREE.MeshPhongMaterial( {map: loader.load('bricks.jpg')} ); 
+      const tower = new THREE.Mesh( towerGeo, towerMat ); 
+      tower.position.set(-sphereRadius - 1, 1.8 , 0);
+      tower.castShadow = true;
+      tower.receiveShadow = true;
+      scene.add( tower );
+
+      const tower2Geo = new THREE.CylinderGeometry( 1.5, 1.5, .1, 32 ); 
+      const tower2Mat = new THREE.MeshPhongMaterial( {color: '#D3D3D3'} ); 
+      const tower2 = new THREE.Mesh( tower2Geo, tower2Mat ); 
+      tower2.position.set(-sphereRadius - 1, 2.8 , 0);
+      tower2.castShadow = true;
+      tower2.receiveShadow = true;
+      scene.add( tower2 );
+
+      const tower3Geo = new THREE.CylinderGeometry( 0.7, 0.7, 1.5, 32 ); 
+      const tower3Mat = new THREE.MeshPhongMaterial( {color: '#D3D3D3'} );  
+      const tower3 = new THREE.Mesh( tower3Geo, tower3Mat ); 
+      tower3.position.set(-sphereRadius - 1, 2.9 , 0);
+      tower3.rotation.y = 0.2;
+      tower3.castShadow = true;
+      tower3.receiveShadow = true;
+      scene.add( tower3 );
+
+      const tower4Geo = new THREE.ConeGeometry( 1.2, 1, 32 );  
+      const tower4Mat = new THREE.MeshPhongMaterial( {color: '#D3D3D3'} ); 
+      const tower4 = new THREE.Mesh( tower4Geo, tower4Mat ); 
+      tower4.position.set(-sphereRadius - 1, 3.9 , 0);
+      tower4.castShadow = true;
+      tower4.receiveShadow = true;
+      scene.add( tower4 );
+
+
+      //lights
+
+      const ambColor = 0xFFFFFF;
+      const ambIntensity = 0.2;
+      const ambLight = new THREE.AmbientLight(ambColor, ambIntensity);
+      scene.add(ambLight);
+
+      const spotColor = 0xc2c5cc;
+      const spotIntensity = 0.9;
+      const spotLight = new THREE.SpotLight(spotColor, spotIntensity,100,0.5);
+      spotLight.position.set(-sphereRadius - 1, 2.9 , 0);
+      spotLight.map = shadowTexture;
+      spotLight.target.position.set(10, 2, 10);
+      spotLight.castShadow = true;
+      spotLight.shadow.mapSize.width = 1024;
+      spotLight.shadow.mapSize.height = 1024;
+
+      spotLight.shadow.camera.near = 2;
+      spotLight.shadow.camera.far = 400;
+      spotLight.shadow.camera.fov = 30;
+      scene.add(spotLight);
+      scene.add(spotLight.target);
+      
+
+      
+
+
+      const skyColor = 0xB1E1FF;  // light blue
+      const pIntensity = 0.6  ;
+      const pLight = new THREE.PointLight(skyColor, pIntensity);
+      pLight.position.set(0, 10, 0);
+      pLight.castShadow = true;
+      scene.add(pLight);
+
+
+      
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(render);
+
+    }
+    function shipInst(x,z){
+      const shipGeo = new THREE.BoxGeometry(2, 1, 1.7);
+      const shipMat = new THREE.MeshPhongMaterial({color: '#808080'});
+      const shipMesh = new THREE.Mesh(shipGeo, shipMat);
+      shipMesh.position.set(x+5, 0, z);
+      shipMesh.castShadow = true;
+      shipMesh.receiveShadow = true;
+      scene.add(shipMesh);
+
+      const ship2Geo = new THREE.BoxGeometry(2, 1, 1.4);
+      const ship2Mesh = new THREE.Mesh(ship2Geo, shipMat);
+      ship2Mesh.position.set(x+3, 0, z);
+      ship2Mesh.castShadow = true;
+      ship2Mesh.receiveShadow = true;
+      scene.add(ship2Mesh);
+
+      const ship3Geo = new THREE.BoxGeometry(1, 0.5, 0.7);
+      const ship3Mat = new THREE.MeshPhongMaterial({
+        map: renderTarget.texture,
+      });
+      const ship3Mesh = new THREE.Mesh(ship3Geo, ship3Mat);
+      ship3Mesh.position.set(x+4, 0.7 , z);
+      ship3Mesh.castShadow = true;
+      ship3Mesh.receiveShadow = true;
+      scene.add(ship3Mesh);
+
+      const stackGeo = new THREE.CylinderGeometry( 0.3, 0.3, 0.8, 32 ); 
+      const stackMat = new THREE.MeshPhongMaterial( {color: '#000000'} ); 
+      const stack1 = new THREE.Mesh( stackGeo, stackMat ); 
+      stack1.position.set(x+4, 1.3 , z);
+      stack1.rotation.z = -0.2;
+      stack1.castShadow = true;
+      stack1.receiveShadow = true;
+      scene.add( stack1 );
+
+      const ship4Geo = new THREE.BoxGeometry(2, 1, 1.4);
+      const ship4Mesh = new THREE.Mesh(ship4Geo, shipMat);
+      ship4Mesh.position.set(x+7, 0, z);
+      ship4Mesh.castShadow = true;
+      ship4Mesh.receiveShadow = true;
+      scene.add(ship4Mesh);
+      const ship5Geo = new THREE.BoxGeometry(1.4, 0.6, 1.2);
+      const ship5Mesh = new THREE.Mesh(ship5Geo, shipMat);
+      ship5Mesh.position.set(x+5, 0.7, z);
+      ship5Mesh.castShadow = true;
+      ship5Mesh.receiveShadow = true;
+      scene.add(ship5Mesh);
+      const ship6Geo = new THREE.BoxGeometry(1.4, 0.4, 0.7  );
+      const ship6Mesh = new THREE.Mesh(ship6Geo, shipMat);
+      ship6Mesh.position.set(x+6.5, 0.7, z);
+      ship6Mesh.castShadow = true;
+      ship6Mesh.receiveShadow = true;
+      scene.add(ship6Mesh);
+      const ship7Geo = new THREE.BoxGeometry(1.5, 1, 1.2  );
+      const ship7Mesh = new THREE.Mesh(ship7Geo, shipMat);
+      ship7Mesh.position.set(x+8.4, 0, z);
+      ship7Mesh.castShadow = true;
+      ship7Mesh.receiveShadow = true;
+      scene.add(ship7Mesh);
+      const ship8Geo = new THREE.BoxGeometry(0.7, 0.5, 0.7);
+      const ship8Mesh = new THREE.Mesh(ship8Geo, ship3Mat);
+      ship8Mesh.position.set(x+7.5, 0.7, z);
+      ship8Mesh.castShadow = true;
+      ship8Mesh.receiveShadow = true;
+      scene.add(ship8Mesh);
+      const stack2 = new THREE.Mesh( stackGeo, stackMat ); 
+      stack2.position.set(x+7.5, 1.3, z);
+      stack2.rotation.z = -0.2;
+      stack2.castShadow = true;
+      stack2.receiveShadow = true;
+      scene.add( stack2 );
+      const ship9Geo = new THREE.BoxGeometry(1, 1, 1.1);
+      const ship9Mesh = new THREE.Mesh(ship9Geo, shipMat);
+      ship9Mesh.position.set(x+1.6, 0, z);
+      ship9Mesh.castShadow = true;
+      ship9Mesh.receiveShadow = true;
+      scene.add(ship9Mesh);
+      const ship10Geo = new THREE.BoxGeometry(1, 1, 0.9);
+      const ship10Mesh = new THREE.Mesh(ship10Geo, shipMat);
+      ship10Mesh.position.set(x+1.1, 0, z);
+      ship10Mesh.castShadow = true;
+      ship10Mesh.receiveShadow = true;
+      scene.add(ship10Mesh);
+      
+      const wheelGeo = new THREE.CylinderGeometry( 0.9, 0.9, .5, 32 ); 
+      const wheelMat = new THREE.MeshPhongMaterial( {map: loader.load('texture.jpg')} ); 
+      const wheel1 = new THREE.Mesh( wheelGeo, wheelMat ); 
+      wheel1.position.set(x+5, 0, -1+z);
+      wheel1.rotation.x = 11;
+      wheel1.castShadow = true;
+      wheel1.receiveShadow = true;
+      scene.add( wheel1 );
+      const wheel2 = new THREE.Mesh( wheelGeo, wheelMat ); 
+      wheel2.position.set(x+5, 0, 1+z);
+      wheel2.rotation.x = 11;
+      wheel2.castShadow = true;
+      wheel2.receiveShadow = true;
+      scene.add( wheel2 );
+      wheels.push(wheel1);
+      wheels.push(wheel2);
+      
+    }
+    
+    function render(time) {
+      time *= 0.001;  // convert time to seconds
+       wheels.forEach((wheel, ndx) => {
+         const speed = 1 + ndx * .1;
+         const rot = time * speed;
+         //wheel.rotation.x = rot;
+         wheel.rotation.y = -rot;
+       });
+      
+      renderer.render(scene, camera);
+
+      renderer.setRenderTarget(renderTarget);
+      renderer.render(rtScene, rtCamera);
+      renderer.setRenderTarget(null);
+      
+      requestAnimationFrame(render);
+    }
+        main();
+    </script>
+
+    
+  </body>
+</html>
